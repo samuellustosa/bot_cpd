@@ -2,6 +2,8 @@ import os
 import json
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from flask import Flask
+import threading
 
 # Configuração inicial
 TOKEN = "7203695932:AAHHq_YdDYpARzoxSAiBAQQd6gF-TQfU8wM"
@@ -73,7 +75,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "ajuda":
         await ajuda(update, context)  # Aqui chamamos a função de ajuda corretamente
 
-
 # Função de ajuda
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Exibe uma mensagem de ajuda com as opções do bot."""
@@ -93,7 +94,6 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     by: samuel
     """
 
-
     # Verifica se a interação foi com uma mensagem ou callback_query
     if update.callback_query:
         await update.callback_query.answer()  # Responde ao callback
@@ -101,8 +101,26 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message:
         await update.message.reply_text(texto_ajuda)  # Caso a ajuda seja acionada via texto
 
+# Função de salvar imagem
+async def salvar_imagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Salva imagens enviadas pelo usuário.""" 
+    modo = context.user_data.get("modo")
 
-# Função de busca melhorada
+    if modo == "adicionar_solucao" and update.message.photo:
+        foto = update.message.photo[-1]
+        descricao = update.message.caption or "Sem descrição"
+        id_solucao = str(len(solucoes) + 1)
+
+        caminho_imagem = os.path.join(DIRETORIO_IMAGENS, f"solucao_{id_solucao}.jpg")
+        file = await foto.get_file()
+        await file.download_to_drive(caminho_imagem)
+
+        solucoes[id_solucao] = {"texto": descricao, "imagem": caminho_imagem}
+        salvar_solucoes(solucoes)
+        await update.message.reply_text(f"✅ Solução com imagem adicionada com ID: {id_solucao}")
+        context.user_data["modo"] = None
+
+# Função para gerenciar texto
 async def receber_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gerencia entrada de texto do usuário.""" 
     modo = context.user_data.get("modo", None)
@@ -146,34 +164,24 @@ async def receber_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("ID inválido. Tente novamente.")
         context.user_data["modo"] = None
 
-# Função de salvar imagem
-async def salvar_imagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Salva imagens enviadas pelo usuário.""" 
-    modo = context.user_data.get("modo")
+# Inicializando o Flask
+app = Flask(__name__)
 
-    if modo == "adicionar_solucao" and update.message.photo:
-        foto = update.message.photo[-1]
-        descricao = update.message.caption or "Sem descrição"
-        id_solucao = str(len(solucoes) + 1)
+@app.route('/')
+def home():
+    return "Bot está funcionando!"
 
-        caminho_imagem = os.path.join(DIRETORIO_IMAGENS, f"solucao_{id_solucao}.jpg")
-        file = await foto.get_file()
-        await file.download_to_drive(caminho_imagem)
+# Função para rodar o bot em uma thread separada
+def run_bot():
+    application = ApplicationBuilder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receber_texto))
+    application.add_handler(MessageHandler(filters.PHOTO, salvar_imagem))
+    application.run_polling()
 
-        solucoes[id_solucao] = {"texto": descricao, "imagem": caminho_imagem}
-        salvar_solucoes(solucoes)
-        await update.message.reply_text(f"✅ Solução com imagem adicionada com ID: {id_solucao}")
-        context.user_data["modo"] = None
-
-# Configuração do Bot
-app = ApplicationBuilder().token(TOKEN).build()
-
-# Handlers do Bot
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(button_handler))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receber_texto))
-app.add_handler(MessageHandler(filters.PHOTO, salvar_imagem))
-
-# Inicialização
-print("Bot está funcionando com melhorias avançadas...")
-app.run_polling()
+# Rodando o servidor Flask e o bot em threads separadas
+if __name__ == '__main__':
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.start()
+    app.run(host='0.0.0.0', port=5000)
