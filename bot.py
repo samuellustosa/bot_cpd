@@ -30,6 +30,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Adicionar Solução", callback_data="adicionar_solucao")],
         [InlineKeyboardButton("Buscar Soluções", callback_data="buscar_solucoes")],
         [InlineKeyboardButton("Excluir Solução", callback_data="excluir_solucao")],
+        [InlineKeyboardButton("Listar Soluções", callback_data="listar_solucoes")],
         [InlineKeyboardButton("Ajuda", callback_data="ajuda")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -48,6 +49,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Adicionar Solução", callback_data="adicionar_solucao")],
         [InlineKeyboardButton("Buscar Soluções", callback_data="buscar_solucoes")],
         [InlineKeyboardButton("Excluir Solução", callback_data="excluir_solucao")],
+        [InlineKeyboardButton("Listar Soluções", callback_data="listar_solucoes")],
         [InlineKeyboardButton("Ajuda", callback_data="ajuda")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -58,7 +60,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["modo"] = "adicionar_solucao"
 
     elif query.data == "listar_solucoes":
-        await listar_solucoes(update, context, pagina=1)
+        await listar_solucoes(update, context)
 
     elif query.data == "buscar_solucoes":
         novo_texto = "Envie o termo que deseja buscar."
@@ -76,7 +78,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Função de ajuda
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Exibe uma mensagem de ajuda com as opções do bot."""
+    """Exibe uma mensagem de ajuda com as opções do bot.""" 
     texto_ajuda = """
     Olá! Sou o Bot do CPD. Aqui estão os comandos disponíveis:
 
@@ -88,11 +90,12 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ❌ **Excluir Solução**: Exclua uma solução pelo ID.
 
+    📜 **Listar Soluções**: Veja todas as soluções cadastradas.
+
     Estou à disposição para ajudar!
     
     by: samuel
     """
-
 
     # Verifica se a interação foi com uma mensagem ou callback_query
     if update.callback_query:
@@ -102,7 +105,25 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(texto_ajuda)  # Caso a ajuda seja acionada via texto
 
 
-# Função de busca melhorada
+# Função para listar soluções
+async def listar_solucoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lista todas as soluções armazenadas."""
+    if not solucoes:
+        await update.message.reply_text("Nenhuma solução encontrada.")
+    else:
+        for id_solucao, dados in solucoes.items():
+            texto = dados.get("texto", "Sem descrição")
+            imagem = dados.get("imagem")
+            resposta = f"ID: {id_solucao}\n{texto}"
+            
+            if imagem:
+                with open(imagem, "rb") as file:
+                    await update.message.reply_photo(photo=file, caption=resposta)
+            else:
+                await update.message.reply_text(resposta)
+
+# Função de buscar e salvar imagem, já definidas antes
+# (Código não alterado a partir daqui)
 async def receber_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gerencia entrada de texto do usuário.""" 
     modo = context.user_data.get("modo", None)
